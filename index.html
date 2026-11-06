@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#09090B" />
+  <title>Desk</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <link rel="stylesheet" href="app.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="brand">Desk</div>
+      <div id="modeBadge" class="badge paper">PAPER</div>
+    </header>
+
+    <div id="banner" class="banner hidden"></div>
+    <div id="loading" class="loading"><div class="pulse"></div><span>Opening the desk…</span></div>
+    <div id="error" class="error hidden">
+      <p>Can't reach the desk.</p>
+      <button id="retryBtn" class="btn">Retry</button>
+    </div>
+
+    <main id="main" class="hidden">
+      <section id="tab-home" class="tabpanel">
+        <div class="balance-block">
+          <div class="muted">Balance</div>
+          <div id="odometer" class="odometer">$0.00</div>
+          <div id="balanceSub" class="muted"></div>
+        </div>
+        <div class="card chart-card">
+          <canvas id="balanceChart" width="390" height="160"></canvas>
+          <div id="chartEmpty" class="empty hidden">No balance history yet.</div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Positions</h2></div>
+          <div id="positions"></div>
+          <div id="positionsEmpty" class="empty">No positions yet. Waiting for the night.</div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Latest</h2><button class="textbtn" data-go="activity">See all</button></div>
+          <div id="homeActivity"></div>
+        </div>
+      </section>
+
+      <section id="tab-agents" class="tabpanel hidden">
+        <div id="agents"></div>
+        <div id="agentsEmpty" class="empty hidden">No decisions yet.</div>
+      </section>
+
+      <section id="tab-activity" class="tabpanel hidden">
+        <div id="activity"></div>
+        <div id="activityEmpty" class="empty hidden">Nothing happened yet.</div>
+      </section>
+
+      <section id="tab-account" class="tabpanel hidden">
+        <div class="card">
+          <div class="card-head"><h2>Mode</h2></div>
+          <p id="modeNote" class="muted"></p>
+          <p class="muted">Plan B is read-only. Switch PAPER or LIVE in Telegram.</p>
+        </div>
+        <div class="card" id="settingsCard">
+          <div class="card-head"><h2>Settings</h2></div>
+          <p class="muted">Read-only. Pause, mode, and settings changes are Telegram commands.</p>
+          <div id="settings"></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>FOMO</h2></div>
+          <p id="fomoHandle" class="muted"></p>
+          <p><a id="inviteLink" class="link" target="_blank" rel="noopener">Invite link</a></p>
+        </div>
+      </section>
+
+      <section id="screen-coin" class="tabpanel hidden screen">
+        <button class="back" data-back>‹ Back</button>
+        <div id="coinHead"></div>
+        <div class="card chart-card">
+          <canvas id="coinChart" width="390" height="220"></canvas>
+          <div id="coinChartEmpty" class="empty hidden">No candles yet.</div>
+        </div>
+        <div class="row" id="coinActions"></div>
+        <div class="card" id="coinAudit"></div>
+      </section>
+
+      <section id="screen-auditor" class="tabpanel hidden screen">
+        <button class="back" data-back>‹ Back</button>
+        <h2>Auditor</h2>
+        <div id="disc" class="disc">
+          <div class="disc-ring"></div>
+          <div id="layerGrid" class="layer-grid"></div>
+        </div>
+        <p id="auditorStatus" class="muted"></p>
+      </section>
+    </main>
+
+    <nav class="tabs">
+      <button data-tab="home" class="active">Home</button>
+      <button data-tab="agents">Agents</button>
+      <button data-tab="activity">Activity</button>
+      <button data-tab="account">Account</button>
+    </nav>
+  </div>
+  <script src="chart.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
