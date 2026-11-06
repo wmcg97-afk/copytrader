@@ -7,34 +7,89 @@
   let openMint = null;
   const POLL_MS = 15000;
 
-  function readFragment() {
-    const raw = (location.hash || "").replace(/^#/, "");
-    const found = {};
-    if (raw) {
-      raw.split("&").forEach((part) => {
-        const i = part.indexOf("=");
-        if (i <= 0) return;
-        const key = part.slice(0, i);
-        if (key !== "t" && key !== "d") return;
-        let val = part.slice(i + 1);
-        try { val = decodeURIComponent(val.replace(/\+/g, "%2B")); } catch (e) {}
-        found[key] = val;
-      });
+  function cookieGet(name) {
+    const prefix = name + "=";
+    const parts = (document.cookie || "").split(";");
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i].trim();
+      if (p.indexOf(prefix) === 0) {
+        try { return decodeURIComponent(p.slice(prefix.length)); } catch (e) { return p.slice(prefix.length); }
+      }
     }
+    return "";
+  }
+
+  function cookieSet(name, value) {
+    if (!value) return;
+    const maxAge = 60 * 60 * 24 * 400;
+    // Shared between Safari and the home-screen app on the same origin (iOS).
+    document.cookie = name + "=" + encodeURIComponent(value)
+      + "; Path=/copytrader; Max-Age=" + maxAge + "; Secure; SameSite=Lax";
+  }
+
+  function parseAuthParams(raw) {
+    const found = {};
+    if (!raw) return found;
+    String(raw).replace(/^[#?]/, "").split("&").forEach((part) => {
+      if (!part) return;
+      const i = part.indexOf("=");
+      if (i <= 0) return;
+      const key = part.slice(0, i);
+      if (key !== "t" && key !== "d") return;
+      let val = part.slice(i + 1);
+      try { val = decodeURIComponent(val.replace(/\+/g, "%2B")); } catch (e) {}
+      found[key] = val;
+    });
+    return found;
+  }
+
+  function readFragment() {
+    const found = Object.assign(
+      {},
+      parseAuthParams(location.search),
+      parseAuthParams(location.hash)
+    );
     try {
-      if (found.t) localStorage.setItem("app_token", found.t);
-      if (found.d) localStorage.setItem("data_path", found.d);
-      token = found.t || localStorage.getItem("app_token") || "";
-      dataPath = found.d || localStorage.getItem("data_path") || "";
+      if (found.t) {
+        localStorage.setItem("app_token", found.t);
+        localStorage.setItem("APP_TOKEN", found.t);
+        cookieSet("desk_t", found.t);
+      }
+      if (found.d) {
+        localStorage.setItem("data_path", found.d);
+        localStorage.setItem("desk_data_path", found.d);
+        cookieSet("desk_d", found.d);
+      }
+      token = found.t
+        || localStorage.getItem("app_token")
+        || localStorage.getItem("APP_TOKEN")
+        || cookieGet("desk_t")
+        || "";
+      dataPath = found.d
+        || localStorage.getItem("data_path")
+        || localStorage.getItem("desk_data_path")
+        || cookieGet("desk_d")
+        || "";
+      // If we recovered from cookies into a fresh standalone profile, mirror into localStorage.
+      if (token) {
+        localStorage.setItem("app_token", token);
+        localStorage.setItem("APP_TOKEN", token);
+        cookieSet("desk_t", token);
+      }
+      if (dataPath) {
+        localStorage.setItem("data_path", dataPath);
+        localStorage.setItem("desk_data_path", dataPath);
+        cookieSet("desk_d", dataPath);
+      }
     } catch (e) {
-      token = found.t || "";
-      dataPath = found.d || "";
+      token = found.t || cookieGet("desk_t") || "";
+      dataPath = found.d || cookieGet("desk_d") || "";
     }
     if (!dataPath || /[\\/]/.test(dataPath) || dataPath.indexOf("..") !== -1) {
       if (dataPath) dataPath = "";
     }
     if (found.t || found.d) {
-      try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
+      try { history.replaceState(null, "", location.pathname); } catch (e) {}
     }
   }
 
