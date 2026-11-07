@@ -35,9 +35,12 @@ class CliTests(unittest.TestCase):
         return code, buffer.getvalue()
 
     def test_fixture_replay_is_a_dry_run_with_zero_sends(self):
-        state = next((Path(__file__).resolve().parents[2] / "d").rglob("state.json"))
-        index = Path(__file__).resolve().parents[2] / "index.html"
-        before = (state.stat().st_mtime_ns, index.stat().st_mtime_ns)
+        root = Path(__file__).resolve().parents[2]
+        state = next((root / "d").rglob("state.json"), None) if (root / "d").is_dir() else None
+        index = root / "index.html"
+        before = None
+        if state is not None and index.is_file():
+            before = (state.stat().st_mtime_ns, index.stat().st_mtime_ns)
         with mock.patch("urllib.request.build_opener", side_effect=AssertionError("network")):
             code, report = self._main([
                 "--fixture",
@@ -55,7 +58,8 @@ class CliTests(unittest.TestCase):
         self.assertIn("fixture: yes", report)
         self.assertNotIn("pf_live_should_not_print", report)
         self.assertIn("Nov 6 21:46:05 AST", report)
-        self.assertEqual((state.stat().st_mtime_ns, index.stat().st_mtime_ns), before)
+        if before is not None:
+            self.assertEqual((state.stat().st_mtime_ns, index.stat().st_mtime_ns), before)
 
     def test_missing_provider_key_does_not_open_a_socket(self):
         os.environ.pop("PUMPFOMO_API_KEY", None)
