@@ -8,6 +8,7 @@ from pathlib import Path
 from .card import build_card
 from .client import Budget, CapError, ProviderError, following_url, get_json, positions_url
 from .constants import MAX_REQUESTS
+from .guard import safe_text
 from .redact import redact
 from .seen import SeenError, load_seen, save_seen
 from .swap import Swap, normalize_handle, parse_following, parse_positions
@@ -96,14 +97,14 @@ def execute(config: RunConfig, *, transport=None, send_transport=None) -> RunRes
     try:
         positions = _positions(config, handle, budget, transport, result)
     except (ProviderError, CapError, ValueError) as exc:
-        return _stop(result, str(exc), config_error=isinstance(exc, ValueError))
+        return _stop(result, safe_text(exc), config_error=isinstance(exc, ValueError))
     if result.page_note:
         return _stop(result, result.page_note, config_error=False)
     try:
         if config.following:
             _following(config, handle, budget, transport, result)
     except (ProviderError, CapError, ValueError) as exc:
-        return _stop(result, str(exc), config_error=isinstance(exc, ValueError))
+        return _stop(result, safe_text(exc), config_error=isinstance(exc, ValueError))
 
     swaps = positions.swaps
     result.has_next_page = positions.has_next_page
@@ -132,7 +133,7 @@ def execute(config: RunConfig, *, transport=None, send_transport=None) -> RunRes
                 send_one(token=config.telegram_token or "", card=card, transport=_require_send(send_transport))
             except NotifyError as exc:
                 result.seen_count = len(record.ids)
-                return _stop(result, str(exc), config_error=_is_config_notify(str(exc)))
+                return _stop(result, safe_text(exc), config_error=_is_config_notify(str(exc)))
             result.sends = 1
             if not config.replay and candidate.id:
                 record.add(candidate.id)

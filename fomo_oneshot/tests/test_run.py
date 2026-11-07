@@ -3,14 +3,20 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
+import traceback
 import unittest
 from pathlib import Path
+from unittest import mock
+
+import urllib.request
 
 from fomo_oneshot.client import Budget, CapError, ProviderError, get_json, positions_url
 from fomo_oneshot.client import _NoRedirect
 from fomo_oneshot.constants import OWNER_CHAT_ID
 from fomo_oneshot.engine import RunConfig, execute, render_report
+from fomo_oneshot.guard import guarded_opener
 from fomo_oneshot.redact import redact
 from fomo_oneshot.seen import SeenError, assert_safe_seen_path
 from fomo_oneshot.telegram import OwnerGuard, assert_owner, send_one
@@ -105,6 +111,65 @@ class BudgetTests(unittest.TestCase):
             handler.redirect_request(None, None, 302, "moved", {}, "https://evil.example/pf_live_secret")
         self.assertNotIn("evil.example", str(caught.exception))
         self.assertNotIn("pf_live", str(caught.exception))
+
+    def test_redirect_does_not_open_the_next_url_or_keep_the_request(self):
+        handler = _NoRedirect()
+        opened = []
+
+        class Parent:
+            def open(self, *args, **kwargs):
+                opened.append(args)
+                raise AssertionError("followed redirect")
+
+        handler.parent = Parent()
+        request = urllib.request.Request(
+            "https://api.pumpfomo.com/v1/fomo/users/PressingProfits/positions",
+            headers={"Authorization": "Bearer pf_live_supersecret"},
+            method="GET",
+        )
+        headers = {"location": "https://evil.example/steal?token=pf_live_supersecret"}
+        for method in ("http_error_301", "http_error_302", "http_error_303", "http_error_307", "http_error_308"):
+            with self.assertRaises(ProviderError) as caught:
+                getattr(handler, method)(request, None, 302, "moved", headers)
+            text = "".join(traceback.format_exception(caught.exception))
+            self.assertNotIn("pf_live_supersecret", text)
+            self.assertNotIn("evil.example", text)
+            self.assertIsNone(caught.exception.__cause__)
+            self.assertIsNone(caught.exception.__context__)
+        self.assertEqual(opened, [])
+
+    def test_env_proxy_is_not_installed(self):
+        with mock.patch.dict(os.environ, {"https_proxy": "http://user:pw@proxy.example:8080", "http_proxy": "http://user:pw@proxy.example:8080"}):
+            opener = guarded_opener(_NoRedirect())
+        blob = " ".join(
+            f"{type(handler).__name__} {getattr(handler, 'proxies', '')}" for handler in opener.handlers
+        )
+        self.assertNotIn("proxy.example", blob)
+        self.assertNotIn("user:pw", blob)
+
+    def test_transport_exception_and_bad_json_do_not_chain_secrets(self):
+        secret = "pf_live_supersecret"
+
+        def boom(url, token):
+            raise OSError(f"Bearer {token} request {url}")
+
+        with self.assertRaises(ProviderError) as caught:
+            get_json(positions_url("PressingProfits"), token=secret, transport=boom, budget=Budget(3))
+        text = "".join(traceback.format_exception(caught.exception))
+        self.assertNotIn(secret, text)
+        self.assertNotIn(secret, str(caught.exception))
+        self.assertIsNone(caught.exception.__cause__)
+        self.assertIsNone(caught.exception.__context__)
+
+        def bad_json(url, token):
+            return 200, f"not-json {secret}".encode()
+
+        with self.assertRaises(ProviderError) as caught:
+            get_json(positions_url("PressingProfits"), token=secret, transport=bad_json, budget=Budget(3))
+        text = "".join(traceback.format_exception(caught.exception))
+        self.assertNotIn(secret, text)
+        self.assertIsNone(caught.exception.__cause__)
+        self.assertIsNone(caught.exception.__context__)
 
 
 class RedactTests(unittest.TestCase):
@@ -364,7 +429,7 @@ class RunTests(unittest.TestCase):
     def test_owner_guard_rejects_other_chats_before_transport(self):
         self.assertEqual(assert_owner(OWNER_CHAT_ID), OWNER_CHAT_ID)
         self.assertEqual(assert_owner(str(OWNER_CHAT_ID)), OWNER_CHAT_ID)
-        for other in (1, "1", None, True, OWNER_CHAT_ID + 1):
+        for other in (1, "1", None, True, OWNER_CHAT_ID + 1, float(OWNER_CHAT_ID)):
             with self.assertRaises(OwnerGuard):
                 assert_owner(other)
 
@@ -405,6 +470,38 @@ class RunTests(unittest.TestCase):
         self.assertEqual(saved[0], "id-0")
         self.assertEqual(saved[-1], "id-49")
         self.assertNotIn("id-59", saved)
+
+    def test_seen_path_inside_published_data_does_not_fetch_or_write(self):
+        repo = Path(__file__).resolve().parents[2]
+        target = repo / "d" / "fomo-oneshot-should-not-exist.json"
+        calls = []
+
+        def transport(url, token):
+            calls.append(url)
+            return 200, b"{}"
+
+        try:
+            result = execute(
+                self.config(
+                    fixture=False,
+                    positions_payload=None,
+                    api_key="pf_live_supersecret",
+                    seen_path=target,
+                    replay=True,
+                    send=True,
+                    telegram_token=BOT,
+                ),
+                transport=transport,
+                send_transport=lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("sent")),
+            )
+            self.assertEqual(calls, [])
+            self.assertEqual(result.sends, 0)
+            self.assertFalse(target.exists())
+            self.assertIn("published desk", result.stopped or "")
+            self.assertNotIn("pf_live_supersecret", render_report(result))
+        finally:
+            if target.exists():
+                target.unlink()
 
     def test_seen_store_cannot_replace_published_desk_files(self):
         repo = Path(__file__).resolve().parents[2]

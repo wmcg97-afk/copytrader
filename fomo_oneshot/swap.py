@@ -45,15 +45,33 @@ class Swap:
 
     @property
     def token_network_id(self) -> int | None:
+        """Chain of the coin the trader bought or sold.
+
+        Buy uses the received leg. Sell uses the sent leg. The top-level
+        networkId is used only when that leg is missing and the other leg
+        does not name a different chain.
+        """
         if self.side == "sell":
-            if self.in_network_id is not None:
-                return self.in_network_id
-            return self.network_id
-        if self.side == "buy":
-            if self.out_network_id is not None:
-                return self.out_network_id
-            return self.network_id
-        return None
+            specific, other = self.in_network_id, self.out_network_id
+        elif self.side == "buy":
+            specific, other = self.out_network_id, self.in_network_id
+        else:
+            return None
+        if specific is not None:
+            return specific
+        if self.network_id is None:
+            return None
+        if other is not None and other != self.network_id:
+            return None
+        return self.network_id
+
+    @property
+    def cross_chain(self) -> bool:
+        return (
+            self.in_network_id is not None
+            and self.out_network_id is not None
+            and self.in_network_id != self.out_network_id
+        )
 
 
 @dataclass(frozen=True)

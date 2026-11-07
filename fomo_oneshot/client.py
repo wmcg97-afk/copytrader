@@ -11,6 +11,7 @@ from decimal import Decimal
 from urllib.parse import quote
 
 from .constants import API_ORIGIN, FOLLOWING_PATH, HTTP_TIMEOUT_SECONDS, MAX_BODY_BYTES, MAX_REQUESTS, POSITIONS_PATH
+from .guard import guarded_opener, raise_clean, safe_text
 from .redact import redact
 from .swap import normalize_handle
 
@@ -76,22 +77,25 @@ def get_json(url: str, *, token: str, transport, budget: Budget) -> object:
     budget.take()
     try:
         status, body = transport(url, key)
-    except ProviderError:
-        raise
+    except ProviderError as exc:
+        message = safe_text(exc)
+        raise_clean(ProviderError(message))
     except Exception as exc:
-        raise ProviderError("request failed; stopped") from exc
+        safe_text(exc)
+        raise_clean(ProviderError("request failed; stopped"))
     if not isinstance(status, int) or not isinstance(body, (bytes, bytearray)):
-        raise ProviderError("request failed; stopped")
+        raise_clean(ProviderError("request failed; stopped"))
     if len(body) > MAX_BODY_BYTES:
-        raise ProviderError("response too large; stopped")
+        raise_clean(ProviderError("response too large; stopped"))
     if status in {401, 403, 402, 429}:
-        raise ProviderStop(status, _code(bytes(body)))
+        raise_clean(ProviderStop(status, _code(bytes(body))))
     if status != 200:
-        raise ProviderError(f"HTTP {status}; stopped")
+        raise_clean(ProviderError(f"HTTP {status}; stopped"))
     try:
         return json.loads(bytes(body).decode("utf-8"), parse_float=Decimal)
     except (UnicodeError, json.JSONDecodeError) as exc:
-        raise ProviderError("response was not JSON; stopped") from exc
+        safe_text(exc)
+        raise_clean(ProviderError("response was not JSON; stopped"))
 
 
 def urllib_transport(url: str, token: str) -> tuple[int, bytes]:
@@ -106,25 +110,39 @@ def urllib_transport(url: str, token: str) -> tuple[int, bytes]:
         },
         method="GET",
     )
-    opener = urllib.request.build_opener(_NoRedirect())
+    opener = guarded_opener(_NoRedirect())
     try:
         with opener.open(request, timeout=HTTP_TIMEOUT_SECONDS) as response:
             return response.status, response.read(MAX_BODY_BYTES + 1)
     except urllib.error.HTTPError as exc:
+        code = exc.code
         try:
             body = exc.read(MAX_BODY_BYTES + 1)
         except Exception:
             body = b""
-        return exc.code, body
-    except ProviderError:
-        raise
+        safe_text(exc)
+        return code, body
+    except ProviderError as exc:
+        message = safe_text(exc)
+        raise_clean(ProviderError(message))
     except Exception as exc:
-        raise ProviderError("request failed; stopped") from exc
+        safe_text(exc)
+        raise_clean(ProviderError("request failed; stopped"))
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
-        raise ProviderError(f"HTTP {code} redirect; stopped")
+        _stop_redirect(code)
+
+    def http_error_302(self, req, fp, code, msg, headers):
+        _stop_redirect(code)
+
+    http_error_301 = http_error_303 = http_error_307 = http_error_308 = http_error_302
+
+
+def _stop_redirect(code: object) -> None:
+    status = code if isinstance(code, int) else 302
+    raise_clean(ProviderError(f"HTTP {status} redirect; stopped"))
 
 
 def _url(template: str, handle: str) -> str:

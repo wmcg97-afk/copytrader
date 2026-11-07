@@ -91,6 +91,8 @@ Nov 6 21:46:05 AST
 
 `2026-11-07T01:46:05Z` is `Nov 6 21:46:05 AST` (fixed UTC-4).
 
+Run from the directory that contains the `fomo_oneshot` package (`python3 -m fomo_oneshot ...`). This package is not the deployed desk.
+
 ## Later commands
 
 Run these only after review, from a checkout of this branch. Do not run them inside the deployed desk tree, and do not point `--seen` at `d/` or at a desk database. Put the key and bot token in the environment. Do not put them in the command line or in a file in this repo.
@@ -144,5 +146,8 @@ Dependencies: Python 3.11+ standard library only. No pip install. The tests use 
 - Wallet `address` on a swap is not mapped to a handle.
 - Chains outside Solana, Robinhood, Base, and BNB use the invite link.
 - `503` is not retried, even though the provider docs say a short retry is free.
+- Env `https_proxy` is ignored, so the bearer token is not sent to a proxy and a proxy hop cannot add a request outside the cap.
+- A cross-chain swap links only the coin leg: the received token on a buy, the sent token on a sell. If that leg's chain id is missing and the other leg names a different chain, the button is the invite link. Both leg ids are printed when they differ.
+- Provider and Telegram failures are reduced to a status line. The urllib error, request, response body, and exception chain are not kept.
 - The seen file is local JSON, not the desk database. A corrupt seen file stops the run instead of being treated as empty.
 - Fixture files under `fomo_oneshot/fixtures/` are labeled fixtures. They are not stored API responses.

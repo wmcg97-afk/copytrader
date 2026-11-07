@@ -9,6 +9,7 @@ from html import escape
 
 from .card import Card
 from .constants import HTTP_TIMEOUT_SECONDS, OWNER_CHAT_ID
+from .guard import guarded_opener, raise_clean, safe_text
 from .redact import redact
 
 
@@ -25,10 +26,12 @@ class OwnerGuard(NotifyError):
 def assert_owner(chat_id: object) -> int:
     if isinstance(chat_id, bool):
         raise OwnerGuard()
-    try:
-        number = int(chat_id)  # type: ignore[arg-type]
-    except (TypeError, ValueError) as exc:
-        raise OwnerGuard() from exc
+    if isinstance(chat_id, int):
+        number = chat_id
+    elif isinstance(chat_id, str) and chat_id.strip().isdigit():
+        number = int(chat_id.strip())
+    else:
+        raise OwnerGuard()
     if number != OWNER_CHAT_ID:
         raise OwnerGuard()
     return number
@@ -49,12 +52,14 @@ def send_one(*, token: str, card: Card, transport, chat_id: object = OWNER_CHAT_
     }
     try:
         status = transport(key, payload)
-    except NotifyError:
-        raise
+    except NotifyError as exc:
+        message = safe_text(exc)
+        raise_clean(NotifyError(message))
     except Exception as exc:
-        raise NotifyError("telegram request failed") from exc
+        safe_text(exc)
+        raise_clean(NotifyError("telegram request failed"))
     if status != 200:
-        raise NotifyError(f"telegram HTTP {status}; not sent")
+        raise_clean(NotifyError(f"telegram HTTP {status}; not sent"))
 
 
 def urllib_send(token: str, payload: dict) -> int:
@@ -65,26 +70,40 @@ def urllib_send(token: str, payload: dict) -> int:
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    opener = urllib.request.build_opener(_NoRedirect())
+    opener = guarded_opener(_NoRedirect())
     try:
         with opener.open(request, timeout=HTTP_TIMEOUT_SECONDS) as response:
             response.read(65536)
             return response.status
     except urllib.error.HTTPError as exc:
+        code = exc.code
         try:
             exc.read(4096)
         except Exception:
             pass
-        return exc.code
-    except NotifyError:
-        raise
+        safe_text(exc)
+        return code
+    except NotifyError as exc:
+        message = safe_text(exc)
+        raise_clean(NotifyError(message))
     except Exception as exc:
-        raise NotifyError("telegram request failed") from exc
+        safe_text(exc)
+        raise_clean(NotifyError("telegram request failed"))
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
-        raise NotifyError(f"telegram HTTP {code} redirect; not sent")
+        _stop_redirect(code)
+
+    def http_error_302(self, req, fp, code, msg, headers):
+        _stop_redirect(code)
+
+    http_error_301 = http_error_303 = http_error_307 = http_error_308 = http_error_302
+
+
+def _stop_redirect(code: object) -> None:
+    status = code if isinstance(code, int) else 302
+    raise_clean(NotifyError(f"telegram HTTP {status} redirect; not sent"))
 
 
 def _clean_token(token: str) -> str:

@@ -72,6 +72,47 @@ class LinkTests(unittest.TestCase):
         )
         self.assertEqual(fomo_url(item), OPEN_FOMO_URL)
 
+        self.assertEqual(fomo_url(item), OPEN_FOMO_URL)
+
+    def test_buy_links_the_received_token_and_sell_links_the_sent_token(self):
+        bought = swap(
+            side="buy",
+            in_token="0x0000000000000000000000000000000000000001",
+            out_token=TOKEN,
+            in_network_id=8453,
+            out_network_id=1399811149,
+            network_id=8453,
+        )
+        sold = swap(
+            side="sell",
+            in_token=TOKEN,
+            out_token="0x0000000000000000000000000000000000000001",
+            in_network_id=1399811149,
+            out_network_id=8453,
+            network_id=8453,
+        )
+        self.assertIn("chainId=1399811149", fomo_url(bought))
+        self.assertIn(f"address={TOKEN}", fomo_url(bought))
+        self.assertNotIn("chainId=8453", fomo_url(bought))
+        self.assertIn("chainId=1399811149", fomo_url(sold))
+        self.assertNotIn("0x0000000000000000000000000000000000000001", fomo_url(sold))
+        from fomo_oneshot.card import build_card
+        text = build_card(handle="PressingProfits", swap=bought, fixture=False, replay=True).text
+        self.assertIn("cross-chain in 8453 out 1399811149", text)
+        self.assertIn("Solana 1399811149", text)
+        self.assertIn("Not a live buy or sell signal. Not a recommendation.", text)
+
+    def test_missing_leg_does_not_borrow_the_other_chain(self):
+        item = swap(
+            side="sell",
+            in_token=TOKEN,
+            in_network_id=None,
+            out_network_id=8453,
+            network_id=1399811149,
+        )
+        self.assertIsNone(item.token_network_id)
+        self.assertEqual(fomo_url(item), OPEN_FOMO_URL)
+
     def test_bad_address_does_not_become_a_coin_url(self):
         item = swap(side="buy", out_token="not a token <script>", out_network_id=8453)
         self.assertEqual(fomo_url(item), OPEN_FOMO_URL)

@@ -147,6 +147,47 @@ class MappingTests(unittest.TestCase):
         self.assertIsNone(handles)
         self.assertIn("data.users", note or "")
 
+    def test_documented_wrapper_uses_data_swaps_and_display_side(self):
+        payload = {
+            "data": {
+                "swaps": [
+                    {
+                        "id": "fixture-wrapper-buy",
+                        "address": "not-a-handle",
+                        "networkId": 8453,
+                        "inTokenAddress": "0x0000000000000000000000000000000000000001",
+                        "outTokenAddress": "BtSvtGREKtTWuc5YMQE1SVHJsGCb5YCyFS8G73sypump",
+                        "inHumanAmount": 10,
+                        "outHumanAmount": 20,
+                        "humanUsdAmountIn": 10,
+                        "humanUsdAmountOut": None,
+                        "displayPriceUsd": 0.5,
+                        "display": {"side": "buy"},
+                        "createdAt": "2026-10-21T18:14:40.000Z",
+                        "provider": "DFLOW",
+                        "isOffPlatform": False,
+                        "isCrossmint": False,
+                        "inNetworkId": 8453,
+                        "outNetworkId": 1399811149,
+                        "recipient": None,
+                        "inTradeId": None,
+                        "outTradeId": None,
+                    }
+                ],
+                "hasNextPage": True,
+            },
+            "meta": {"source": "fomo.family", "cache": "live", "fetchedAt": "2026-10-25T23:11:34.065Z"},
+        }
+        page = parse_positions(payload)
+        self.assertIsNone(page.note)
+        self.assertTrue(page.has_next_page)
+        item = page.swaps[0]
+        self.assertEqual(item.side, "buy")
+        self.assertEqual(item.traded_token, "BtSvtGREKtTWuc5YMQE1SVHJsGCb5YCyFS8G73sypump")
+        self.assertEqual(item.token_network_id, 1399811149)
+        self.assertNotEqual(item.traded_token, item.address)
+        self.assertTrue(item.cross_chain)
+
     def test_following_fixture_uses_user_handle_only(self):
         handles, note = parse_following(load("following_page.json"))
         self.assertIsNone(note)

@@ -45,6 +45,8 @@ def build_card(*, handle: str, swap: Swap, fixture: bool, replay: bool) -> Card:
     lines.append(_usd(swap))
     lines.append(f"price {_fmt(swap.price)}" if swap.price is not None else "price unknown")
     lines.append(_chain(swap))
+    if swap.cross_chain:
+        lines.append(f"cross-chain in {swap.in_network_id} out {swap.out_network_id}")
     lines.append(f"provider {swap.provider}" if swap.provider else "provider unknown")
     if swap.is_off_platform is True:
         lines.append("off-platform")
@@ -80,7 +82,7 @@ def _usd(swap: Swap) -> str:
 def _chain(swap: Swap) -> str:
     chain_id = swap.token_network_id
     if chain_id is None:
-        if swap.network_id is None:
+        if swap.in_network_id is not None or swap.out_network_id is not None or swap.network_id is None:
             return "chain unknown"
         return f"network id {swap.network_id}"
     name = CHAINS.get(chain_id)
