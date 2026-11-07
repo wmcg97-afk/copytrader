@@ -1,0 +1,33 @@
+{
+  "_fixture": true,
+  "_label": "OFFLINE FIXTURE — malformed and unknown rows mixed with one valid sell. Not a capture and not data verification.",
+  "data": {
+    "swaps": [
+      "not-an-object",
+      {"id": "bad-display", "display": "sell", "inHumanAmount": "20973102.33", "networkId": "1399811149"},
+      {"id": "bad-side", "display": {"side": "hold"}, "inTokenAddress": "BtSvtGREKtTWuc5YMQE1SVHJsGCb5YCyFS8G73sypump"},
+      {
+        "id": "bad-types",
+        "display": {"side": "sell"},
+        "inHumanAmount": "12",
+        "outHumanAmount": true,
+        "networkId": true,
+        "inTokenAddress": 12345,
+        "provider": "OK",
+        "createdAt": "not-a-time"
+      },
+      {
+        "id": "unknown-chain",
+        "display": {"side": "buy"},
+        "outTokenAddress": "BtSvtGREKtTWuc5YMQE1SVHJsGCb5YCyFS8G73sypump",
+        "outNetworkId": 1,
+        "inHumanAmount": null,
+        "humanUsdAmountIn": null,
+        "displayPriceUsd": null,
+        "createdAt": null,
+        "address": "NOT_A_HANDLE_WALLET"
+      }
+    ],
+    "hasNextPage": false
+  }
+}

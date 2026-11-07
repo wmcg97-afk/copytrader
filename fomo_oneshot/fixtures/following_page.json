@@ -1,0 +1,14 @@
+{
+  "_fixture": true,
+  "_label": "OFFLINE FIXTURE — not a live capture. The four handles match the parent-verified CivilNewCanid follow list. Ids and counts were not captured and are omitted. The last row has no userHandle and must not be guessed from displayName.",
+  "data": {
+    "users": [
+      {"userHandle": "PressingProfits"},
+      {"userHandle": "bystevenr"},
+      {"userHandle": "escobarpablo"},
+      {"userHandle": "savipww"},
+      {"displayName": "do not guess this handle"}
+    ],
+    "hasNextPage": true
+  }
+}
