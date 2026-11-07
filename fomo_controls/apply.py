@@ -164,6 +164,12 @@ def _filters(store: Store, parts: list[str]) -> tuple[str | None, dict | None]:
     if len(parts) == 2 and parts[1] == "t":
         store.awaiting = "min_trade"
         return prompt_screen(store, "Send a whole number of USD for the minimum trade.")
+    if len(parts) == 2 and parts[1] == "c":
+        store.awaiting = "min_mcap"
+        return prompt_screen(store, "Send a whole USD market cap. This does not start a lookup.")
+    if len(parts) == 2 and parts[1] == "l":
+        store.awaiting = "min_liq"
+        return prompt_screen(store, "Send a whole USD liquidity. This does not start a lookup.")
     if len(parts) == 2 and parts[1] == "h":
         store.awaiting = "min_holders"
         return prompt_screen(store, "Send a whole number, or off. Holder counts are not in swaps.")
@@ -171,10 +177,16 @@ def _filters(store: Store, parts: list[str]) -> tuple[str | None, dict | None]:
         store.awaiting = "interval"
         return prompt_screen(store, "Send a requested interval in seconds. It will not start polling.")
     if len(parts) == 2 and parts[1] == "m":
-        settings.min_mcap_usd = None if settings.min_mcap_usd is not None else 50_000
+        if settings.min_mcap_usd is None:
+            settings.min_mcap_usd = settings.mcap_amount_usd
+        else:
+            settings.min_mcap_usd = None
         return filters_screen(store)
     if len(parts) == 2 and parts[1] == "q":
-        settings.min_liq_usd = None if settings.min_liq_usd is not None else 20_000
+        if settings.min_liq_usd is None:
+            settings.min_liq_usd = settings.liq_amount_usd
+        else:
+            settings.min_liq_usd = None
         return filters_screen(store)
     if len(parts) == 2 and parts[1] == "s":
         settings.show_sells = not settings.show_sells
@@ -238,6 +250,10 @@ def _message(store: Store, text: str, now: datetime) -> tuple[str, dict, str]:
         store.awaiting = None
         screen, markup = filters_screen(store)
         return screen, markup, "edit"
+    if store.awaiting == "min_mcap":
+        return _set_threshold(store, stripped, "mcap")
+    if store.awaiting == "min_liq":
+        return _set_threshold(store, stripped, "liq")
     if store.awaiting == "min_holders":
         if stripped.casefold() in {"off", "выкл"}:
             store.settings.min_holders = None
@@ -280,6 +296,31 @@ def _search_text(store: Store, text: str) -> tuple[str, dict, str]:
     store.awaiting = None
     screen, markup = accounts_screen(store)
     return screen, markup, "edit"
+
+
+def _set_threshold(store: Store, text: str, kind: str) -> tuple[str, dict, str]:
+    number = _amount(text)
+    if number is None:
+        screen, markup = prompt_screen(store, "Threshold was not a whole number of USD. Nothing was saved. No lookup was started.")
+        return screen, markup, "edit"
+    if kind == "mcap":
+        store.settings.mcap_amount_usd = number
+        store.settings.min_mcap_usd = number
+    else:
+        store.settings.liq_amount_usd = number
+        store.settings.min_liq_usd = number
+    store.awaiting = None
+    screen, markup = filters_screen(store)
+    return f"Saved ${number}. Solana enrichment stays on request. No collector.\n{screen}", markup, "edit"
+
+
+def _amount(text: str) -> int | None:
+    if not re.fullmatch(r"^[0-9]{1,13}$", text):
+        return None
+    number = int(text)
+    if number > 1_000_000_000_000:
+        return None
+    return number
 
 
 def _split_handles(text: str) -> tuple[list[str], list[str]]:

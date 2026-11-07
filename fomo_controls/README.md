@@ -40,6 +40,14 @@ python3 -m fomo_controls.install_desk --desk /workspace/desk --apply
 
 Restart the existing desk process yourself after `--apply`. Do not start a second Python process. Then, from the owner chat, send `/fomo`. The menu says monitoring is inactive. Resume does not start trader polling.
 
+An upgrade from the already patched `telegram.py` (`d89cfdc5dacb476c0a598f969179c9a158580833f58490a99afa7414b2a51c4e`) copies these packages and does not rewrite that file. It also does not touch `.fomo_controls/`, `settings.json`, `secrets/`, `data/`, or `web/`. Package directories that already exist are copied to `fomo_controls.bak-d89cfdc5dacb` and `fomo_oneshot.bak-d89cfdc5dacb` before their files are updated. Rollback is those backups plus `telegram.py.bak-fa512ba0f95c` if the hook itself was installed in the earlier step.
+
+## Market data
+
+`fomo_controls.dex.process_candidate` is the only path that calls DEX Screener. The menu, `/fomo`, and the one-shot historical send do not call it. There is no background refresh. Solana only: `GET https://api.dexscreener.com/token-pairs/v1/solana/{token}`. The coin is the token received on a buy and the token sent on a sell. The pool must have that exact base address. Liquidity is the one winning pool, not a sum. FDV is never treated as market cap. Results are cached at least 30 seconds and are stale after 60 seconds. The fetched time is the HTTP observation, not the swap time and not a chain update time.
+
+A candidate evaluation has to be requested by a future collector. Until that exists, enabled market-cap and liquidity thresholds still reject unenriched swaps. The saved public sample, market cap 3593 and liquidity 3348.53, fails the default $50,000 and $20,000 thresholds. Zero is a real zero. Missing or invalid numbers are unknown and cannot pass.
+
 ## Tests
 
 ```text

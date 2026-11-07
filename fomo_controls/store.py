@@ -33,6 +33,8 @@ class Settings:
     min_trade_usd: int = 50
     min_mcap_usd: int | None = 50_000
     min_liq_usd: int | None = 20_000
+    mcap_amount_usd: int = 50_000
+    liq_amount_usd: int = 20_000
     min_holders: int | None = None
     networks: dict[int, bool] = field(default_factory=lambda: {item: True for item in NETWORK_IDS})
     show_sells: bool = True
@@ -180,7 +182,7 @@ def from_dict(payload: object) -> Store:
     menu_id = payload.get("menu_message_id")
     store.menu_message_id = menu_id if isinstance(menu_id, int) and not isinstance(menu_id, bool) and menu_id > 0 else None
     awaiting = payload.get("awaiting")
-    store.awaiting = awaiting if awaiting in {None, "add", "search", "min_trade", "min_holders", "interval"} else None
+    store.awaiting = awaiting if awaiting in {None, "add", "search", "min_trade", "min_mcap", "min_liq", "min_holders", "interval"} else None
     search = payload.get("search")
     store.search = search if isinstance(search, str) and len(search) <= 32 else ""
     hours = payload.get("recent_hours")
@@ -247,6 +249,8 @@ def _settings_dict(settings: Settings) -> dict:
         "min_trade_usd": settings.min_trade_usd,
         "min_mcap_usd": settings.min_mcap_usd,
         "min_liq_usd": settings.min_liq_usd,
+        "mcap_amount_usd": settings.mcap_amount_usd,
+        "liq_amount_usd": settings.liq_amount_usd,
         "min_holders": settings.min_holders,
         "networks": {str(key): value for key, value in settings.networks.items()},
         "show_sells": settings.show_sells,
@@ -267,6 +271,14 @@ def _settings_from(payload: object) -> Settings:
     settings.min_trade_usd = _bounded(payload.get("min_trade_usd"), 0, 1_000_000_000, 50)
     settings.min_mcap_usd = _optional(payload.get("min_mcap_usd"), 1_000_000_000_000)
     settings.min_liq_usd = _optional(payload.get("min_liq_usd"), 1_000_000_000_000)
+    if "mcap_amount_usd" in payload:
+        settings.mcap_amount_usd = _bounded(payload.get("mcap_amount_usd"), 0, 1_000_000_000_000, 50_000)
+    elif isinstance(payload.get("min_mcap_usd"), int) and not isinstance(payload.get("min_mcap_usd"), bool):
+        settings.mcap_amount_usd = _bounded(payload.get("min_mcap_usd"), 0, 1_000_000_000_000, 50_000)
+    if "liq_amount_usd" in payload:
+        settings.liq_amount_usd = _bounded(payload.get("liq_amount_usd"), 0, 1_000_000_000_000, 20_000)
+    elif isinstance(payload.get("min_liq_usd"), int) and not isinstance(payload.get("min_liq_usd"), bool):
+        settings.liq_amount_usd = _bounded(payload.get("min_liq_usd"), 0, 1_000_000_000_000, 20_000)
     settings.min_holders = _optional(payload.get("min_holders"), 1_000_000_000)
     networks = {item: True for item in NETWORK_IDS}
     raw = payload.get("networks")

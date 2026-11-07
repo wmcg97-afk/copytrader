@@ -36,7 +36,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if plan.already:
         print("already installed: telegram.py left unchanged")
-        _copy_packages(desk)
+        _copy_packages(desk, backup=True)
         print("packages checked, no restart")
         return 0
     backup = _backup(desk / "telegram.py")
@@ -49,7 +49,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     (desk / "telegram.py").write_bytes(patched.read_bytes())
     patched.unlink(missing_ok=True)
-    _copy_packages(desk)
+    _copy_packages(desk, backup=True)
     print("installed: restart the existing desk process yourself when ready; this installer did not restart it or send a message")
     return 0
 
@@ -74,19 +74,19 @@ def _plan(desk: Path) -> _Plan:
     plan = _Plan()
     if digest == PATCHED:
         plan.already = True
-        plan.lines.append("telegram.py already has the /fomo hook")
-    elif digest != ORIGINAL:
-        raise InstallError("telegram.py hash does not match the expected desk source; no write")
-    else:
-        plan.lines.append("telegram.py hash matches the expected desk source")
+        plan.lines.append("telegram.py matches the deployed /fomo hook; packages will be upgraded and telegram.py will not be rewritten")
+    elif digest == ORIGINAL:
+        plan.lines.append("telegram.py hash matches the pre-hook desk source")
         plan.lines.append("would backup telegram.py then apply the /fomo hook")
+    else:
+        raise InstallError("telegram.py hash does not match the deployed hook or the pre-hook source; no write")
     for name in PACKAGES:
         src = _package_source(name)
         dest = desk / name
         if dest.exists() and not dest.is_dir():
             raise InstallError(f"{name} exists and is not a directory; no write")
         plan.lines.append(f"would copy package {name}" if not dest.exists() else f"would update package {name} only where bytes differ")
-    for forbidden in ("settings.json", "secrets", "data", "web"):
+    for forbidden in ("settings.json", "secrets", "data", "web", ".fomo_controls"):
         plan.lines.append(f"will not modify {forbidden}")
     return plan
 
@@ -115,7 +115,12 @@ def _apply_diff(original: Path) -> Path:
     return out
 
 
-def _copy_packages(desk: Path) -> None:
+def _copy_packages(desk: Path, *, backup: bool) -> None:
+    if backup:
+        for name in PACKAGES:
+            dest = desk / name
+            if dest.is_dir():
+                _backup_tree(dest)
     for name in PACKAGES:
         src = _package_source(name)
         dest = desk / name
@@ -135,6 +140,14 @@ def _copy_packages(desk: Path) -> None:
             target.write_bytes(data)
 
 
+def _backup_tree(path: Path) -> Path:
+    dest = path.with_name(path.name + ".bak-" + PATCHED[:12])
+    if dest.exists():
+        dest = path.with_name(path.name + ".bak-" + PATCHED[:12] + "-2")
+    shutil.copytree(path, dest, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    return dest
+
+
 def _package_source(name: str) -> Path:
     if name == "fomo_controls":
         return ROOT
@@ -149,7 +162,7 @@ def _forbidden(target: Path, desk: Path) -> bool:
     parts = relative.parts
     if not parts:
         return True
-    if parts[0] in {"secrets", "data", "web"}:
+    if parts[0] in {"secrets", "data", "web", ".fomo_controls"}:
         return True
     if relative.name in {"settings.json", "state.json", "activity.json", "chart.json"}:
         return True

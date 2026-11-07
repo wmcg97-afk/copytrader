@@ -304,6 +304,49 @@ class MenuTests(unittest.TestCase):
             seed_snapshot(store, "PressingProfits", {"data": {"userHandle": "x"}})
         self.assertFalse(store.find("PressingProfits").seeded)
 
+    def test_set_market_cap_and_liquidity_without_a_lookup(self):
+        store = new_store()
+        from fomo_controls.store import bind_menu, from_dict
+        bind_menu(store, 10)
+        prompt = apply(store, callback("f:c"), now=NOW)
+        self.assertIn("does not start a lookup", prompt.text)
+        saved = apply(store, message("75000"), now=NOW)
+        self.assertEqual(store.settings.min_mcap_usd, 75000)
+        self.assertEqual(store.settings.mcap_amount_usd, 75000)
+        self.assertIn("No collector", saved.text)
+        apply(store, callback("f:m"), now=NOW)
+        self.assertIsNone(store.settings.min_mcap_usd)
+        apply(store, callback("f:m"), now=NOW)
+        self.assertEqual(store.settings.min_mcap_usd, 75000)
+        rejected = apply(store, callback("f:l"), now=NOW)
+        self.assertEqual(apply(store, message("20.5"), now=NOW).text.startswith("Threshold was not"), True)
+        self.assertEqual(store.settings.min_liq_usd, 20000)
+        self.assertIn("does not start a lookup", rejected.text)
+        old = {
+            "version": 1,
+            "paused": True,
+            "language": "ru",
+            "menu_message_id": 77,
+            "monitoring": "inactive",
+            "traders": [{
+                "handle": "savipww",
+                "source": "owner-added",
+                "seeded": True,
+                "seen_ids": ["keep-me"],
+                "cached": [],
+            }],
+            "settings": {"min_trade_usd": 50, "min_mcap_usd": 50000, "min_liq_usd": 20000},
+        }
+        loaded = from_dict(old)
+        self.assertEqual(loaded.menu_message_id, 77)
+        self.assertEqual(loaded.language, "ru")
+        self.assertTrue(loaded.paused)
+        self.assertEqual(loaded.traders[0].handle, "savipww")
+        self.assertEqual(loaded.traders[0].seen_ids, ["keep-me"])
+        self.assertEqual(loaded.settings.min_mcap_usd, 50000)
+        self.assertEqual(loaded.settings.mcap_amount_usd, 50000)
+        self.assertEqual(loaded.settings.liq_amount_usd, 20000)
+
 
 def _urls(markup):
     found = []

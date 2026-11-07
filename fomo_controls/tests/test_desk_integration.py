@@ -185,6 +185,8 @@ class DeskTelegramTests(unittest.TestCase):
         self.assertEqual(self.http.calls[-1]["method_name"], "editMessageText")
         self.assertEqual(self.http.calls[-1]["json"]["message_id"], menu_id)
         self.assertIn("verified-follows-2026-11-07", self.http.calls[-1]["json"]["text"])
+        self.assertEqual(self.settings.values["scanner.min_liquidity_usd"], 40000.0)
+        self.assertEqual(self.db.balance, 201.25)
         asyncio.run(self.bot._on_callback({
             "id": "cq-add",
             "data": "a:n",
@@ -237,6 +239,36 @@ class DeskTelegramTests(unittest.TestCase):
             self.assertEqual(path.read_bytes(), data)
         self.assertTrue((self.desk / "fomo_controls" / "desk_hook.py").is_file())
         self.assertFalse((self.desk / "telegram.py").read_text(encoding="utf-8").count("while True") != 1)
+
+    def test_upgrade_from_deployed_hash_preserves_menu_state(self):
+        state = self.desk / ".fomo_controls" / "controls.json"
+        state.parent.mkdir()
+        payload = {
+            "version": 1,
+            "paused": True,
+            "language": "en",
+            "menu_message_id": 77,
+            "monitoring": "inactive",
+            "traders": [{
+                "handle": "PressingProfits",
+                "source": "verified-follows-2026-11-07",
+                "seeded": True,
+                "seen_ids": ["fixture-sell-1"],
+                "cached": [],
+            }],
+            "settings": {"min_trade_usd": 50, "min_mcap_usd": 50000, "min_liq_usd": 20000},
+        }
+        state.write_text(json.dumps(payload), encoding="utf-8")
+        before_state = state.read_bytes()
+        before_telegram = (self.desk / "telegram.py").read_bytes()
+        self.assertEqual(hashlib.sha256(before_telegram).hexdigest(), PATCHED)
+        self.assertEqual(install_main(["--desk", str(self.desk)]), 0)
+        self.assertEqual((self.desk / "telegram.py").read_bytes(), before_telegram)
+        self.assertEqual(install_main(["--desk", str(self.desk), "--apply"]), 0)
+        self.assertEqual((self.desk / "telegram.py").read_bytes(), before_telegram)
+        self.assertEqual(state.read_bytes(), before_state)
+        self.assertTrue((self.desk / "fomo_controls" / "dex.py").is_file())
+        self.assertTrue(any(path.name.startswith("fomo_controls.bak-") for path in self.desk.iterdir()))
 
 
 def _normalize(text: str) -> str:

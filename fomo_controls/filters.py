@@ -9,7 +9,7 @@ from fomo_oneshot.swap import Swap
 from .store import Settings
 
 
-def filter_reasons(swap: Swap, settings: Settings) -> list[str]:
+def filter_reasons(swap: Swap, settings: Settings, market=None) -> list[str]:
     reasons: list[str] = []
     amount = swap.usd_in if swap.usd_in is not None else swap.usd_out
     if amount is None:
@@ -26,13 +26,21 @@ def filter_reasons(swap: Swap, settings: Settings) -> list[str]:
     elif not settings.networks[chain]:
         reasons.append("network off")
     if settings.min_mcap_usd is not None:
-        reasons.append("mcap unknown")
+        cap = None if market is None else market.market_cap
+        if cap is None:
+            reasons.append("mcap unknown")
+        elif cap < Decimal(settings.min_mcap_usd):
+            reasons.append("below min mcap")
     if settings.min_liq_usd is not None:
-        reasons.append("liquidity unknown")
+        liquidity = None if market is None else market.liquidity_usd
+        if liquidity is None:
+            reasons.append("liquidity unknown")
+        elif liquidity < Decimal(settings.min_liq_usd):
+            reasons.append("below min liquidity")
     if settings.min_holders is not None:
         reasons.append("holders unknown")
     return reasons
 
 
-def allowed(swap: Swap, settings: Settings) -> bool:
-    return not filter_reasons(swap, settings)
+def allowed(swap: Swap, settings: Settings, market=None) -> bool:
+    return not filter_reasons(swap, settings, market)
