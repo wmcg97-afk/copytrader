@@ -25,6 +25,21 @@ State is a separate JSON file, default `.fomo_controls/controls.json`. It is ref
 - A running collector, `getUpdates`, webhooks, and the 20s loop.
 - Provider market cap, liquidity, and holder fields. They are not in the swaps payload.
 
+Monitoring is not running, and this package does not attach itself to a running bot.
+
+## Desk hook
+
+The deployed desk already has the only `getUpdates` loop in `telegram.py`. `/fomo` is handled inside that loop. `/start`, status, pause, buy, sell, and the `bought:` / `sold:` buttons stay on the desk path. Free text is given to the menu only after Add, Search, or a filter prompt, and a desk command still wins.
+
+Install from a checkout or from the release archive. It checks the hash of `telegram.py`, backs that file up, and copies these packages. It does not restart the process, send a message, or write `settings.json`, `secrets/`, `data/`, or `web/`.
+
+```text
+python3 -m fomo_controls.install_desk --desk /workspace/desk
+python3 -m fomo_controls.install_desk --desk /workspace/desk --apply
+```
+
+Restart the existing desk process yourself after `--apply`. Do not start a second Python process. Then, from the owner chat, send `/fomo`. The menu says monitoring is inactive. Resume does not start trader polling.
+
 ## Tests
 
 ```text
