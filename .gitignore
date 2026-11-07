@@ -1,1 +1,3 @@
 .fomo_oneshot/
+__pycache__/
+*.pyc
