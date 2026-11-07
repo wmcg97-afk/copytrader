@@ -59,6 +59,16 @@ class LinkTests(unittest.TestCase):
             )
             self.assertEqual(fomo_url(item), OPEN_FOMO_URL)
         self.assertEqual(OPEN_FOMO_URL, "https://fomo.family/r/savipww")
+
+    def test_profile_url_keeps_share_source_and_referral(self):
+        from fomo_oneshot.links import profile_url
+        url = profile_url("@PressingProfits")
+        self.assertEqual(
+            url,
+            "https://fomo.family/profile/PressingProfits?source=share_link&r=savipww",
+        )
+        self.assertIn("r=savipww", url)
+        self.assertNotIn("/coin", url)
         self.assertNotIn("chainId", OPEN_FOMO_URL)
         self.assertNotIn("/coin", OPEN_FOMO_URL)
 

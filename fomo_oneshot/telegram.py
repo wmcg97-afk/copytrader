@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import urllib.error
 import urllib.request
+from dataclasses import dataclass
 from html import escape
 
 from .card import Card
@@ -37,8 +38,40 @@ def assert_owner(chat_id: object) -> int:
     return number
 
 
-def send_one(*, token: str, card: Card, transport, chat_id: object = OWNER_CHAT_ID) -> None:
-    """Send exactly one message. The caller must not invoke this in a loop."""
+@dataclass(frozen=True)
+class SendReceipt:
+    """Safe delivery facts only. Never includes the raw Telegram body."""
+
+    confirmed: bool
+    message_id: int | None
+
+
+def interpret_send_response(status: object, body: object) -> SendReceipt:
+    """Confirm only HTTP 200, ok true, and a positive integer message_id.
+
+    Anything else is unconfirmed. Callers must not send again because of it.
+    """
+    if isinstance(status, bool) or not isinstance(status, int) or status != 200:
+        return SendReceipt(False, None)
+    if not isinstance(body, (bytes, bytearray)):
+        return SendReceipt(False, None)
+    try:
+        payload = json.loads(bytes(body[:65536]).decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError):
+        return SendReceipt(False, None)
+    if not isinstance(payload, dict) or payload.get("ok") is not True:
+        return SendReceipt(False, None)
+    result = payload.get("result")
+    if not isinstance(result, dict):
+        return SendReceipt(False, None)
+    message_id = result.get("message_id")
+    if isinstance(message_id, bool) or not isinstance(message_id, int) or message_id <= 0:
+        return SendReceipt(False, None)
+    return SendReceipt(True, message_id)
+
+
+def send_one(*, token: str, card: Card, transport, chat_id: object = OWNER_CHAT_ID) -> SendReceipt:
+    """Send exactly one message. A bad response is unconfirmed and is not retried."""
     chat = assert_owner(chat_id)
     key = _clean_token(token)
     payload = {
@@ -51,18 +84,24 @@ def send_one(*, token: str, card: Card, transport, chat_id: object = OWNER_CHAT_
         },
     }
     try:
-        status = transport(key, payload)
+        raw = transport(key, payload)
     except NotifyError as exc:
         message = safe_text(exc)
         raise_clean(NotifyError(message))
     except Exception as exc:
         safe_text(exc)
         raise_clean(NotifyError("telegram request failed"))
-    if status != 200:
-        raise_clean(NotifyError(f"telegram HTTP {status}; not sent"))
+    status, body = _split_transport_result(raw)
+    if isinstance(status, bool) or not isinstance(status, int) or status != 200:
+        code = status if isinstance(status, int) and not isinstance(status, bool) else "unknown"
+        raise_clean(NotifyError(f"telegram HTTP {code}; not sent"))
+    receipt = interpret_send_response(status, body)
+    if not receipt.confirmed:
+        raise_clean(NotifyError("telegram response unconfirmed; not resent"))
+    return receipt
 
 
-def urllib_send(token: str, payload: dict) -> int:
+def urllib_send(token: str, payload: dict) -> tuple[int, bytes]:
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     request = urllib.request.Request(
         url,
@@ -73,22 +112,29 @@ def urllib_send(token: str, payload: dict) -> int:
     opener = guarded_opener(_NoRedirect())
     try:
         with opener.open(request, timeout=HTTP_TIMEOUT_SECONDS) as response:
-            response.read(65536)
-            return response.status
+            return response.status, response.read(65536)
     except urllib.error.HTTPError as exc:
         code = exc.code
         try:
-            exc.read(4096)
+            body = exc.read(4096)
         except Exception:
-            pass
+            body = b""
         safe_text(exc)
-        return code
+        return code, body
     except NotifyError as exc:
         message = safe_text(exc)
         raise_clean(NotifyError(message))
     except Exception as exc:
         safe_text(exc)
         raise_clean(NotifyError("telegram request failed"))
+
+
+def _split_transport_result(raw: object) -> tuple[object, object]:
+    if isinstance(raw, tuple) and len(raw) == 2:
+        return raw[0], raw[1]
+    if isinstance(raw, int) and not isinstance(raw, bool):
+        return raw, None
+    return None, None
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):

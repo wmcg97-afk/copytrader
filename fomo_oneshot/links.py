@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import re
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 from .constants import CHAINS, FOMO_ORIGIN, OPEN_FOMO_URL, REFERRAL, SHARE_SOURCE
-from .swap import Swap
+from .swap import Swap, normalize_handle
 
 _SOL_ADDRESS = re.compile(r"^[1-9A-HJ-NP-Za-km-z]{32,44}$")
 _EVM_ADDRESS = re.compile(r"^0x[0-9a-fA-F]{40}$")
@@ -32,6 +32,13 @@ def fomo_url(swap: Swap) -> str:
         )
         return f"{FOMO_ORIGIN}/coin?{query}"
     return OPEN_FOMO_URL
+
+
+def profile_url(handle: str) -> str:
+    """Profile share link. Matches the published desk profile URL shape."""
+    safe = quote(normalize_handle(handle), safe="._")
+    query = urlencode((("source", SHARE_SOURCE), ("r", REFERRAL)))
+    return f"{FOMO_ORIGIN}/profile/{safe}?{query}"
 
 
 def _address_ok(token: str) -> bool:

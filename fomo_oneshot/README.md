@@ -151,3 +151,5 @@ Dependencies: Python 3.11+ standard library only. No pip install. The tests use 
 - Provider and Telegram failures are reduced to a status line. The urllib error, request, response body, and exception chain are not kept.
 - The seen file is local JSON, not the desk database. A corrupt seen file stops the run instead of being treated as empty.
 - Fixture files under `fomo_oneshot/fixtures/` are labeled fixtures. They are not stored API responses.
+
+Account menus and filter settings live in `fomo_controls/`. They are inactive and do not poll. A Telegram send counts only when the response has `ok: true` and a positive integer `message_id`. A malformed response is unconfirmed and is not retried.

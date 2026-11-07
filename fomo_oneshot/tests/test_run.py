@@ -27,6 +27,11 @@ SECRET = "pf_live_supersecret"
 BOT = "123456:AAEsecret"
 
 
+def telegram_ok(message_id: int = 7):
+    body = json.dumps({"ok": True, "result": {"message_id": message_id}}).encode()
+    return 200, body
+
+
 def page(ids, *, has_next=False, token=TOKEN):
     swaps = []
     for index, swap_id in enumerate(ids):
@@ -258,7 +263,7 @@ class RunTests(unittest.TestCase):
 
         def transport(token, payload):
             calls.append((token, payload))
-            return 200
+            return telegram_ok(15)
 
         result = execute(
             self.config(replay=True, send=True, telegram_token=BOT),
@@ -285,7 +290,7 @@ class RunTests(unittest.TestCase):
 
         def transport(token, payload):
             calls.append(payload)
-            return 200
+            return telegram_ok(16)
 
         payload = page(["new-1", "new-2", "old-1"])
         result = execute(
@@ -426,6 +431,48 @@ class RunTests(unittest.TestCase):
         stored = json.loads(self.seen.read_text(encoding="utf-8"))
         self.assertEqual(stored["handles"]["pressingprofits"]["ids"], ["old-1"])
 
+    def test_malformed_telegram_json_is_unconfirmed_and_not_resent(self):
+        from fomo_oneshot.telegram import interpret_send_response
+
+        secret = "pf_live_in_body"
+        cases = [
+            (200, b"not-json"),
+            (200, json.dumps({"ok": False, "description": secret}).encode()),
+            (200, json.dumps({"ok": True}).encode()),
+            (200, json.dumps({"ok": True, "result": {"message_id": 0}}).encode()),
+            (200, json.dumps({"ok": True, "result": {"message_id": -3}}).encode()),
+            (200, json.dumps({"ok": True, "result": {"message_id": "12"}}).encode()),
+            (200, json.dumps({"ok": True, "result": {"message_id": True}}).encode()),
+            (200, None),
+        ]
+        for status, body in cases:
+            receipt = interpret_send_response(status, body)
+            self.assertFalse(receipt.confirmed)
+            self.assertIsNone(receipt.message_id)
+        good = interpret_send_response(200, json.dumps({"ok": True, "result": {"message_id": 42, "text": secret}}).encode())
+        self.assertTrue(good.confirmed)
+        self.assertEqual(good.message_id, 42)
+        self.assertNotIn(secret, str(good))
+
+        execute(self.config(positions_payload=page(["old-1"])))
+        calls = []
+
+        def transport(token, payload):
+            calls.append(1)
+            return 200, json.dumps({"ok": True, "result": {"message_id": "nope"}, "token": secret}).encode()
+
+        result = execute(
+            self.config(send=True, telegram_token=BOT, positions_payload=page(["new-1", "old-1"])),
+            send_transport=transport,
+        )
+        self.assertEqual(calls, [1])
+        self.assertEqual(result.sends, 0)
+        self.assertIn("unconfirmed", result.stopped or "")
+        self.assertIn("not resent", result.stopped or "")
+        self.assertNotIn(secret, result.stopped or "")
+        stored = json.loads(self.seen.read_text(encoding="utf-8"))
+        self.assertEqual(stored["handles"]["pressingprofits"]["ids"], ["old-1"])
+
     def test_owner_guard_rejects_other_chats_before_transport(self):
         self.assertEqual(assert_owner(OWNER_CHAT_ID), OWNER_CHAT_ID)
         self.assertEqual(assert_owner(str(OWNER_CHAT_ID)), OWNER_CHAT_ID)
@@ -448,7 +495,7 @@ class RunTests(unittest.TestCase):
 
         def transport(token, payload):
             captured.update(payload)
-            return 200
+            return telegram_ok(17)
 
         nasty = page(["new-1"])
         nasty["data"]["swaps"][0]["provider"] = "DFLOW <tag> & co"
