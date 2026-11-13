@@ -1,0 +1,31 @@
+{
+  "_fixture": true,
+  "_label": "OFFLINE FIXTURE — invented buy. Not a capture and not data verification. Token addresses and the provider name are placeholders.",
+  "data": {
+    "swaps": [
+      {
+        "id": "fixture-buy-1",
+        "address": null,
+        "networkId": 8453,
+        "inTokenAddress": "0x0000000000000000000000000000000000000001",
+        "outTokenAddress": "0x1111111111111111111111111111111111111111",
+        "inHumanAmount": 10.5,
+        "outHumanAmount": 4,
+        "humanUsdAmountIn": 10.5,
+        "humanUsdAmountOut": null,
+        "displayPriceUsd": 2.5,
+        "display": {"side": "BUY"},
+        "createdAt": "2026-01-02T03:04:05Z",
+        "provider": "FIXTURE",
+        "isOffPlatform": false,
+        "isCrossmint": null,
+        "inNetworkId": 8453,
+        "outNetworkId": 8453,
+        "recipient": null,
+        "inTradeId": null,
+        "outTradeId": null
+      }
+    ],
+    "hasNextPage": true
+  }
+}
