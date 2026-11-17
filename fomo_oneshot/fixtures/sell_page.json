@@ -1,0 +1,31 @@
+{
+  "_fixture": true,
+  "_label": "OFFLINE FIXTURE — not a live capture and not data verification. Amounts, price, token, chain, provider, and createdAt match the parent-verified PressingProfits sell. The swap id was not provided. The out-token address was not provided, so it is null rather than a guessed USDC mint. No wallet address is included.",
+  "data": {
+    "swaps": [
+      {
+        "id": "fixture-sell-1",
+        "address": null,
+        "networkId": 1399811149,
+        "inTokenAddress": "BtSvtGREKtTWuc5YMQE1SVHJsGCb5YCyFS8G73sypump",
+        "outTokenAddress": null,
+        "inHumanAmount": 20973102.33,
+        "outHumanAmount": 186.206,
+        "humanUsdAmountIn": 186.21,
+        "humanUsdAmountOut": null,
+        "displayPriceUsd": 0.00000898841,
+        "display": {"side": "sell"},
+        "createdAt": "2026-11-07T01:46:05Z",
+        "provider": "DFLOW",
+        "isOffPlatform": null,
+        "isCrossmint": null,
+        "inNetworkId": 1399811149,
+        "outNetworkId": 1399811149,
+        "recipient": null,
+        "inTradeId": null,
+        "outTradeId": null
+      }
+    ],
+    "hasNextPage": false
+  }
+}

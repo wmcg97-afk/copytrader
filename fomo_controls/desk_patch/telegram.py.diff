@@ -1,0 +1,75 @@
+--- a/desk/telegram.py
++++ b/desk/telegram.py
+@@ -112,7 +112,8 @@
+                 self.settings.set("desk.owner_chat_id", int(chat_id), source="telegram")
+             except Exception:
+                 pass
+-        await self.on_text(text, chat_id)
++        sender = (msg.get("from") or {}).get("id")
++        await self.on_text(text, chat_id, from_id=sender)
+ 
+     async def _on_callback(self, cq):
+         chat_id = ((cq.get("message") or {}).get("chat") or {}).get("id")
+@@ -120,6 +121,9 @@
+         if owner and chat_id and int(chat_id) != owner:
+             return
+         data = cq.get("data") or ""
++        sender = (cq.get("from") or {}).get("id")
++        if await self._maybe_fomo_callback(cq, data, chat_id, sender):
++            return
+         await self._answer_callback(cq.get("id"), "ok")
+         if data.startswith("bought:") and self.desk:
+             mint = data.split(":", 1)[1]
+@@ -130,12 +134,51 @@
+             await self.desk.sold(mint)
+             await self.send("Marked sold.")
+ 
+-    async def on_text(self, text, chat_id=None):
++
++    def _fomo_hook(self):
++        hook = getattr(self, "_fomo_hook_obj", None)
++        if hook is not None:
++            return hook
++        try:
++            from fomo_controls.desk_hook import DeskFomoHook
++        except Exception:
++            return None
++        from pathlib import Path
++        hook = DeskFomoHook(
++            Path(__file__).resolve().parent / ".fomo_controls" / "controls.json",
++            self.http,
++            self._token,
++            self.owner_id,
++        )
++        self._fomo_hook_obj = hook
++        return hook
++
++    async def _maybe_fomo_text(self, raw, chat_id, from_id):
++        hook = self._fomo_hook()
++        if hook is None:
++            return False
++        try:
++            return await hook.maybe_text(raw, chat_id, from_id)
++        except Exception:
++            return False
++
++    async def _maybe_fomo_callback(self, cq, data, chat_id, from_id):
++        hook = self._fomo_hook()
++        if hook is None:
++            return False
++        try:
++            return await hook.maybe_callback(cq, data, chat_id, from_id)
++        except Exception:
++            return False
++
++    async def on_text(self, text, chat_id=None, from_id=None):
+         raw = text.strip()
+         if raw.startswith("/"):
+             raw = raw[1:]
+             raw = raw.split("@", 1)[0]
+         low = raw.lower()
++        if await self._maybe_fomo_text(raw, chat_id, from_id):
++            return
+         if low in ("start", "help"):
+             await self.send(HELP)
+             return
